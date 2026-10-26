@@ -1,0 +1,506 @@
+#!/usr/bin/env node
+/**
+ * Build script for scholarly-reader.
+ * Compiles Tailwind CSS and injects it into the JS bundle.
+ * Outputs:
+ *   - dist/scholarly-reader.css
+ *   - dist/scholarly-reader.js
+ */
+
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, "..");
+const SRC = join(ROOT, "src");
+const DIST = join(ROOT, "dist");
+
+function run(cmd, args, opts = {}) {
+  // On Windows, npx needs .cmd extension
+  const isWindows = process.platform === "win32";
+  const actualCmd = isWindows && cmd === "npx" ? "npx.cmd" : cmd;
+  const result = spawnSync(actualCmd, args, { cwd: ROOT, stdio: "pipe", shell: isWindows, ...opts });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    const err = result.stderr.toString().trim() || result.stdout.toString().trim();
+    throw new Error(`${actualCmd} ${args.join(" ")} failed: ${err}`);
+  }
+  return result.stdout.toString();
+}
+
+function main() {
+  // Ensure dist exists
+  if (!existsSync(DIST)) mkdirSync(DIST, { recursive: true });
+
+  // 1. Compile Tailwind CSS
+  const cssInput = `
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+@layer base {
+  :root,
+  :host {
+    --sr-paper: #F2F5F3;
+    --sr-ink: #16252C;
+    --sr-mute: #5B6C73;
+    --sr-rule: #CBD6D3;
+    --sr-teal: #0E6B73;
+    --sr-gain: #2B7A4B;
+    --sr-risk: #A83A2C;
+    --sr-warn: #9A6A12;
+    --sr-card: #FBFCFB;
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--font-serif);
+    line-height: 1.65;
+    background: var(--sr-paper);
+    color: var(--sr-ink);
+  }
+}
+
+@layer base {
+  :host {
+    all: initial;
+    display: block;
+  }
+}
+
+@layer components {
+  .sr-root {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 4fr);
+    gap: 1.5rem;
+    min-height: 100%;
+  }
+}
+
+@layer components {
+  .sr-page {
+    min-width: 0;
+  }
+}
+
+@layer components {
+  .sr-main {
+    max-width: 72ch;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem;
+  }
+}
+
+@layer components {
+  .sr-header {
+    margin-bottom: 1.5rem;
+  }
+}
+
+@layer components {
+  .sr-title {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 1.8rem;
+    line-height: 1.25;
+    margin: 0.3rem 0;
+  }
+}
+
+@layer components {
+  .sr-authors {
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    color: var(--sr-mute);
+    margin: 0 0 1rem;
+  }
+}
+
+@layer components {
+  .sr-kicker {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    color: var(--sr-mute);
+    margin: 0;
+  }
+}
+
+@layer components {
+  .sr-kicker-link {
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .sr-verdict {
+    margin-top: 1rem;
+  }
+}
+
+@layer components {
+  .sr-verdict b {
+    font-weight: 600;
+  }
+}
+
+@layer components {
+  .sr-h2 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 1.3rem;
+    border-left: 4px solid var(--sr-teal);
+    padding-left: 0.7rem;
+    margin: 2.2rem 0 0.8rem;
+    scroll-margin-top: 1rem;
+  }
+}
+
+@layer components {
+  .sr-item {
+    border-bottom: 1px solid var(--sr-rule);
+    padding: 0.7rem 0;
+    max-width: 72ch;
+  }
+}
+
+@layer components {
+  .sr-table-wrap {
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+}
+
+@layer components {
+  .sr-table-wrap table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.88rem;
+  }
+}
+
+@layer components {
+  .sr-table-wrap th,
+  .sr-table-wrap td {
+    border-bottom: 1px solid var(--sr-rule);
+    padding: 0.45rem 0.5rem;
+    text-align: left;
+    vertical-align: top;
+  }
+}
+
+@layer components {
+  .sr-table-wrap th {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--sr-mute);
+  }
+}
+
+@layer components {
+  .sr-figure {
+    background: var(--sr-card);
+    border: 1px solid var(--sr-rule);
+    padding: 0.6rem;
+    margin: 1.4rem 0;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
+@layer components {
+  .sr-figure img,
+  .sr-figure svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin: 0;
+  }
+}
+
+@layer components {
+  .sr-figure figcaption {
+    font-size: 0.8rem;
+    color: var(--sr-mute);
+    margin-top: 0.4rem;
+  }
+}
+
+@layer components {
+  .sr-toc {
+    position: absolute;
+    top: 4.25rem;
+    left: 1rem;
+    width: 14rem;
+    max-height: calc(100% - 5.75rem);
+    overflow-y: auto;
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    line-height: 1.35;
+    display: none;
+  }
+}
+
+@layer components {
+  .sr-toc-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sr-mute);
+    margin: 0 0 0.6rem 0.6rem;
+  }
+}
+
+@layer components {
+  .sr-toc ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@layer components {
+  .sr-toc-link {
+    display: block;
+    padding: 0.28rem 0.6rem;
+    color: var(--sr-mute);
+    text-decoration: none;
+    border-left: 2px solid var(--sr-rule);
+  }
+}
+
+@layer components {
+  .sr-toc-link:hover {
+    color: var(--sr-ink);
+    background: rgba(22, 37, 44, 0.04);
+  }
+}
+
+@layer components {
+  .sr-toc-sub {
+    padding-left: 1.3rem;
+    font-size: 0.78rem;
+  }
+}
+
+@layer components {
+  .sr-toc-link.active,
+  .sr-toc-link[aria-current] {
+    color: var(--sr-teal);
+    border-left-color: var(--sr-teal);
+    font-weight: 600;
+  }
+}
+
+@layer components {
+  .sr-toc-btn {
+    display: none;
+    appearance: none;
+    border: 1px solid var(--sr-rule);
+    background: var(--sr-card);
+    border-radius: 6px;
+    height: 1.8rem;
+    padding: 0 0.6rem;
+    cursor: pointer;
+    font: inherit;
+    color: var(--sr-ink);
+  }
+}
+
+@layer components {
+  .sr-toc-wide .sr-toc {
+    display: block;
+  }
+}
+
+@layer components {
+  .sr-root:not(.sr-toc-wide) .sr-toc-btn {
+    display: inline-block;
+  }
+}
+
+@layer components {
+  .sr-root:not(.sr-toc-wide).sr-toc-open .sr-toc {
+    display: block;
+    top: 3.1rem;
+    left: 0;
+    bottom: 0;
+    width: 17rem;
+    max-height: none;
+    background: var(--sr-card);
+    border-right: 1px solid var(--sr-rule);
+    padding: 1rem;
+    z-index: 2;
+    box-shadow: 4px 0 14px rgba(22, 37, 44, 0.12);
+  }
+}
+
+@layer components {
+  .sr-badge {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.05rem 0.5rem;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+    vertical-align: middle;
+    border: 1px solid;
+  }
+}
+
+@layer components {
+  .sr-tone-pos {
+    background: var(--sr-gain);
+    border-color: var(--sr-gain);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .sr-tone-neg {
+    background: var(--sr-risk);
+    border-color: var(--sr-risk);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .sr-tone-neu {
+    background: var(--sr-warn);
+    border-color: var(--sr-warn);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .sr-tone-accent {
+    background: var(--sr-teal);
+    border-color: var(--sr-teal);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .sr-unit {
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .sr-on {
+    background: rgba(22, 37, 44, 0.15);
+    box-shadow: 0 0 0 2px rgba(22, 37, 44, 0.15);
+  }
+}
+
+@layer components {
+  .sr-active .sr-unit:hover:not(.sr-on) {
+    background: rgba(22, 37, 44, 0.06);
+  }
+}
+
+@layer components {
+  .sr-hint {
+    position: fixed;
+    right: 0.8rem;
+    bottom: 0.7rem;
+    font: 600 0.7rem var(--font-sans);
+    color: var(--sr-mute);
+    background: var(--sr-card);
+    border: 1px solid var(--sr-rule);
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+    opacity: 0.9;
+    pointer-events: none;
+  }
+}
+
+@layer components {
+  @media print {
+    .sr-on {
+      background: none;
+      box-shadow: none;
+    }
+    .sr-hint {
+      display: none;
+    }
+  }
+}
+
+@layer components {
+  .sr-scroll {
+    overflow-y: auto;
+  }
+}
+
+@layer components {
+  .sr-page p,
+  .sr-page li,
+  .sr-page .sr-item,
+  .sr-page blockquote {
+    text-align: justify;
+    text-justify: inter-word;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+    overflow-wrap: break-word;
+  }
+}
+
+@layer components {
+  .sr-page blockquote {
+    border-left: 3px solid var(--sr-rule);
+    padding-left: 1rem;
+    color: var(--sr-mute);
+    margin: 1.1rem 0;
+  }
+}
+
+@layer components {
+  .sr-page a {
+    color: var(--sr-teal);
+  }
+}
+
+@layer utilities {
+  .sr-ui {
+    font-family: var(--font-sans);
+  }
+}
+`;
+
+  const cssInputPath = join(ROOT, "tailwind-input.css");
+  writeFileSync(cssInputPath, cssInput);
+
+  // Run tailwindcss CLI
+  run("npx", ["tailwindcss", "-i", cssInputPath, "-o", join(DIST, "scholarly-reader.css"), "--config", join(ROOT, "tailwind.config.js")]);
+
+  // 2. Read compiled CSS
+  const compiledCss = readFileSync(join(DIST, "scholarly-reader.css"), "utf8");
+
+  // 3. Read source JS and replace CSS placeholder
+  const sourceJs = readFileSync(join(SRC, "scholarly-reader.js"), "utf8");
+  const bundledJs = sourceJs.replace('export const CSS = "";', `export const CSS = ${JSON.stringify(compiledCss)};`);
+
+  // 4. Write bundled JS
+  writeFileSync(join(DIST, "scholarly-reader.js"), bundledJs);
+
+  console.log("Build complete:");
+  console.log(`  ${join(DIST, "scholarly-reader.css")}`);
+  console.log(`  ${join(DIST, "scholarly-reader.js")}`);
+}
+
+main();
