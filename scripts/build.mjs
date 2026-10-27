@@ -78,7 +78,7 @@ function main() {
 }
 
 @layer components {
-  .sr-root {
+  .sr-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 4fr);
     gap: 1.5rem;
