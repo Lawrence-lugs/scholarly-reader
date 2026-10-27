@@ -495,12 +495,45 @@ function main() {
   const sourceJs = readFileSync(join(SRC, "scholarly-reader.js"), "utf8");
   const bundledJs = sourceJs.replace('export const CSS = "";', `export const CSS = ${JSON.stringify(compiledCss)};`);
 
-  // 4. Write bundled JS
+  // 4. Write bundled JS (ES module for paper-digest)
   writeFileSync(join(DIST, "scholarly-reader.js"), bundledJs);
+
+  // 5. Also produce a classic-script compatible bundle (IIFE) for CSR
+  // Strategy: remove `export ` from declarations (making them IIFE-local),
+  // then add explicit ScholarlyReader assignments at the end.
+  let classicJs = bundledJs
+    // Remove `export ` from const/let/var/function declarations
+    .replace(/^export (const|let|var|function)\b/gm, '$1')
+    // Also handle multi-line export const that were already joined
+    .replace(/^export (const|let|var) (\w+)\s*=/gm, '$1 $2 = ');
+  // Add explicit exports at the end
+  const exportNames = [
+    "CSS",
+    "DEFAULT_UNIT_SELECTOR",
+    "FONT_URL",
+    "protectMath",
+    "restoreMath",
+    "createReadingMark",
+    "buildDocument",
+    "mountLayout",
+    "ensureFonts",
+    "removeFonts",
+  ];
+  const exportAssignments = exportNames.map((name) => `  ScholarlyReader.${name} = ${name};`).join("\n");
+  classicJs = `(function (global) {
+  var ScholarlyReader = {};
+${classicJs}
+
+${exportAssignments}
+  global.ScholarlyReader = ScholarlyReader;
+})(typeof window !== "undefined" ? window : globalThis);
+`;
+  writeFileSync(join(DIST, "scholarly-reader.classic.js"), classicJs);
 
   console.log("Build complete:");
   console.log(`  ${join(DIST, "scholarly-reader.css")}`);
   console.log(`  ${join(DIST, "scholarly-reader.js")}`);
+  console.log(`  ${join(DIST, "scholarly-reader.classic.js")}`);
 }
 
 main();
