@@ -1210,11 +1210,5 @@ function createThemeSelector(doc, opts = {}) {
   ScholarlyReader.mountLayout = mountLayout;
   ScholarlyReader.ensureFonts = ensureFonts;
   ScholarlyReader.removeFonts = removeFonts;
-  ScholarlyReader.THEME_PRESETS = THEME_PRESETS;
-  ScholarlyReader.setTheme = setTheme;
-  ScholarlyReader.getTheme = getTheme;
-  ScholarlyReader.getThemePresets = getThemePresets;
-  ScholarlyReader.initTheme = initTheme;
-  ScholarlyReader.createThemeSelector = createThemeSelector;
   global.ScholarlyReader = ScholarlyReader;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -597,12 +597,6 @@ function main() {
     "mountLayout",
     "ensureFonts",
     "removeFonts",
-    "THEME_PRESETS",
-    "setTheme",
-    "getTheme",
-    "getThemePresets",
-    "initTheme",
-    "createThemeSelector",
   ];
   const exportAssignments = exportNames.map((name) => `  ScholarlyReader.${name} = ${name};`).join("\n");
   classicJs = `(function (global) {
