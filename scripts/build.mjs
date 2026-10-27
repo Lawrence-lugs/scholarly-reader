@@ -148,9 +148,8 @@ function main() {
 
 @layer components {
   .sr-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 4fr);
-    gap: 1.5rem;
+    display: block;
+    position: relative;
     min-height: 100%;
   }
 }
@@ -158,6 +157,17 @@ function main() {
 @layer components {
   .sr-page {
     min-width: 0;
+  }
+}
+
+@layer components {
+  .sr-toc-wide .sr-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 4fr);
+    gap: 1.5rem;
+  }
+  .sr-toc-wide .sr-page {
+    grid-column: 2;
   }
 }
 
