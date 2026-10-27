@@ -803,3 +803,396 @@ export function removeFonts(doc) {
     if (node) node.parentNode.removeChild(node);
   }
 }
+
+/* ------------------------------------------------- theme manager */
+
+export const THEME_PRESETS = {
+  "warm-paper": { name: "Warm paper", paper: "#F7F3E9", ink: "#292821", isDark: false },
+  "pure-white": { name: "Pure white", paper: "#FFFFFF", ink: "#222222", isDark: false },
+  "eink-gray": { name: "E-ink gray", paper: "#F2F2F0", ink: "#242424", isDark: false },
+  "parchment": { name: "Parchment", paper: "#F1E3C6", ink: "#49351F", isDark: false },
+  "cream-book": { name: "Cream book", paper: "#F4EBDD", ink: "#302B26", isDark: false },
+  "newsprint": { name: "Newsprint", paper: "#E8E0D2", ink: "#25231F", isDark: false },
+  "vscode-dark": { name: "VS Code Dark", paper: "#1E1E1E", ink: "#D4D4D4", isDark: true, mute: "#9C9C9C", rule: "#3C3C3C", card: "#252526" },
+  "oled-black": { name: "OLED black", paper: "#121212", ink: "#D0D0D0", isDark: true, mute: "#888888", rule: "#2A2A2A", card: "#1A1A1A" },
+  "charcoal": { name: "Charcoal", paper: "#282828", ink: "#D0CDC7", isDark: true, mute: "#928374", rule: "#3C3836", card: "#32302F" },
+  "midnight-blue": { name: "Midnight blue", paper: "#1C2430", ink: "#D1DCE9", isDark: true, mute: "#7A8A9A", rule: "#2A3A4A", card: "#233040" },
+  "monokai": { name: "Monokai", paper: "#272822", ink: "#E3E3D7", isDark: true, mute: "#75715E", rule: "#3E3D32", card: "#2E2E28" },
+  "solarized-dark": { name: "Solarized Dark", paper: "#002B36", ink: "#D5D0BD", isDark: true, mute: "#657B83", rule: "#073642", card: "#073642" },
+};
+
+const THEME_STORAGE_KEY = "sr-theme";
+
+function getRoot(doc) {
+  return doc.documentElement || doc;
+}
+
+function applyTheme(root, themeId, customColors) {
+  const preset = THEME_PRESETS[themeId];
+  if (!preset && !customColors) return false;
+
+  if (preset) {
+    root.dataset.theme = themeId;
+    // Clear any inline custom properties
+    root.style.removeProperty("--sr-paper");
+    root.style.removeProperty("--sr-ink");
+    root.style.removeProperty("--sr-mute");
+    root.style.removeProperty("--sr-rule");
+    root.style.removeProperty("--sr-card");
+  }
+
+  if (customColors) {
+    delete root.dataset.theme;
+    if (customColors.paper) root.style.setProperty("--sr-paper", customColors.paper);
+    if (customColors.ink) root.style.setProperty("--sr-ink", customColors.ink);
+    if (customColors.mute) root.style.setProperty("--sr-mute", customColors.mute);
+    if (customColors.rule) root.style.setProperty("--sr-rule", customColors.rule);
+    if (customColors.card) root.style.setProperty("--sr-card", customColors.card);
+  }
+
+  return true;
+}
+
+function getCurrentTheme(doc) {
+  const root = getRoot(doc);
+  const saved = localStorage.getItem(THEME_STORAGE_KEY);
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+  }
+  // Default to warm-paper preset
+  return { preset: "warm-paper" };
+}
+
+function saveTheme(doc, theme) {
+  localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(theme));
+}
+
+/**
+ * Apply a theme by preset name, or with custom colors.
+ * @param {Document} doc
+ * @param {Object} opts - { preset?: string, custom?: {paper, ink, mute?, rule?, card?} }
+ */
+export function setTheme(doc, opts = {}) {
+  const root = getRoot(doc);
+  const { preset, custom } = opts;
+
+  let theme;
+  if (preset && THEME_PRESETS[preset]) {
+    applyTheme(root, preset);
+    theme = { preset };
+  } else if (custom) {
+    applyTheme(root, null, custom);
+    theme = { custom };
+  } else {
+    return false;
+  }
+
+  saveTheme(doc, theme);
+  return true;
+}
+
+/**
+ * Get the current theme configuration.
+ * @returns {{preset?: string, custom?: Object}}
+ */
+export function getTheme(doc) {
+  const root = getRoot(doc);
+  const saved = getCurrentTheme(doc);
+
+  if (root.dataset.theme && THEME_PRESETS[root.dataset.theme]) {
+    return { preset: root.dataset.theme };
+  }
+
+  // Check for inline custom properties
+  const paper = root.style.getPropertyValue("--sr-paper").trim();
+  const ink = root.style.getPropertyValue("--sr-ink").trim();
+  if (paper || ink) {
+    return {
+      custom: {
+        paper: paper || undefined,
+        ink: ink || undefined,
+        mute: root.style.getPropertyValue("--sr-mute").trim() || undefined,
+        rule: root.style.getPropertyValue("--sr-rule").trim() || undefined,
+        card: root.style.getPropertyValue("--sr-card").trim() || undefined,
+      },
+    };
+  }
+
+  return saved;
+}
+
+/**
+ * Get all available preset themes.
+ * @returns {Object<string, {name: string, paper: string, ink: string, isDark: boolean}>}
+ */
+export function getThemePresets() {
+  return THEME_PRESETS;
+}
+
+/**
+ * Initialize theme from localStorage on page load.
+ * Call this early, before building the document.
+ */
+export function initTheme(doc) {
+  const saved = getCurrentTheme(doc);
+  const root = getRoot(doc);
+
+  if (saved.preset && THEME_PRESETS[saved.preset]) {
+    applyTheme(root, saved.preset);
+  } else if (saved.custom) {
+    applyTheme(root, null, saved.custom);
+  }
+  // else: keep CSS defaults (warm-paper)
+}
+
+/**
+ * Create and attach the theme selector UI (floating button + dropdown panel).
+ * @param {Document} doc
+ * @param {Object} opts - { parent?: HTMLElement, position?: 'top-right'|'bottom-right'|'top-left'|'bottom-left' }
+ * @returns {{ dispose(): void }}
+ */
+export function createThemeSelector(doc, opts = {}) {
+  const parent = opts.parent || doc.body;
+  const position = opts.position || "bottom-right";
+
+  const root = getRoot(doc);
+  const isDark = root.dataset.theme && THEME_PRESETS[root.dataset.theme]?.isDark;
+
+  // Button
+  const btn = doc.createElement("button");
+  btn.type = "button";
+  btn.className = "sr-theme-btn";
+  btn.setAttribute("aria-label", "Theme selector");
+  btn.setAttribute("aria-expanded", "false");
+  btn.setAttribute("aria-haspopup", "listbox");
+  btn.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="5"/>
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+    </svg>
+  `;
+
+  // Panel
+  const panel = doc.createElement("div");
+  panel.className = "sr-theme-panel";
+  panel.setAttribute("role", "listbox");
+  panel.setAttribute("aria-label", "Choose theme");
+  panel.hidden = true;
+
+  // Build panel content
+  let html = '<div class="sr-theme-presets" role="group" aria-label="Preset themes">';
+  for (const [id, preset] of Object.entries(THEME_PRESETS)) {
+    const active = root.dataset.theme === id ? ' aria-selected="true"' : "";
+    html += `
+      <button type="button" class="sr-theme-preset" data-theme="${id}" role="option"${active} style="--sr-preset-paper: ${preset.paper}; --sr-preset-ink: ${preset.ink};">
+        <span class="sr-theme-swatch" aria-hidden="true"></span>
+        <span class="sr-theme-name">${preset.name}</span>
+      </button>
+    `;
+  }
+  html += '</div>';
+
+  // Custom color pickers
+  html += `
+    <div class="sr-theme-custom" role="group" aria-label="Custom colors">
+      <label class="sr-theme-custom-row">
+        <span class="sr-theme-custom-label">Background</span>
+        <input type="color" class="sr-theme-color-input" data-prop="paper" aria-label="Background color">
+      </label>
+      <label class="sr-theme-custom-row">
+        <span class="sr-theme-custom-label">Text</span>
+        <input type="color" class="sr-theme-color-input" data-prop="ink" aria-label="Text color">
+      </label>
+      <details class="sr-theme-advanced">
+        <summary>Advanced</summary>
+        <label class="sr-theme-custom-row">
+          <span class="sr-theme-custom-label">Muted</span>
+          <input type="color" class="sr-theme-color-input" data-prop="mute" aria-label="Muted text color">
+        </label>
+        <label class="sr-theme-custom-row">
+          <span class="sr-theme-custom-label">Rule</span>
+          <input type="color" class="sr-theme-color-input" data-prop="rule" aria-label="Rule/border color">
+        </label>
+        <label class="sr-theme-custom-row">
+          <span class="sr-theme-custom-label">Card</span>
+          <input type="color" class="sr-theme-color-input" data-prop="card" aria-label="Card background color">
+        </label>
+      </details>
+      <button type="button" class="sr-theme-apply-custom">Apply custom</button>
+      <button type="button" class="sr-theme-reset">Reset to default</button>
+    </div>
+  `;
+
+  panel.innerHTML = html;
+
+  // Positioning styles
+  const posStyles = {
+    "top-right": "top: 1rem; right: 1rem;",
+    "bottom-right": "bottom: 1rem; right: 1rem;",
+    "top-left": "top: 1rem; left: 1rem;",
+    "bottom-left": "bottom: 1rem; left: 1rem;",
+  };
+  btn.style.cssText = `
+    position: fixed;
+    z-index: 1000;
+    ${posStyles[position]}
+    background: var(--sr-card);
+    border: 1px solid var(--sr-rule);
+    border-radius: 6px;
+    padding: 0.5rem;
+    cursor: pointer;
+    color: var(--sr-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  `;
+  panel.style.cssText = `
+    position: fixed;
+    z-index: 1001;
+    ${position.startsWith("top") ? "top: calc(1rem + 44px);" : "bottom: calc(1rem + 44px);"}
+    ${position.endsWith("right") ? "right: 1rem;" : "left: 1rem;"}
+    background: var(--sr-card);
+    border: 1px solid var(--sr-rule);
+    border-radius: 8px;
+    padding: 0.75rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    min-width: 220px;
+    max-width: 280px;
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    color: var(--sr-ink);
+  `;
+
+  // Panel internal styles (injected once)
+  if (!doc.getElementById("sr-theme-styles")) {
+    const style = doc.createElement("style");
+    style.id = "sr-theme-styles";
+    style.textContent = `
+      .sr-theme-presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; margin-bottom: 0.75rem; }
+      .sr-theme-preset { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; border: 2px solid transparent; border-radius: 6px; background: var(--sr-paper); color: var(--sr-ink); cursor: pointer; text-align: left; font: inherit; width: 100%; }
+      .sr-theme-preset:hover { border-color: var(--sr-teal); }
+      .sr-theme-preset[aria-selected="true"] { border-color: var(--sr-teal); background: var(--sr-teal); color: white; }
+      .sr-theme-swatch { width: 1rem; height: 1rem; border-radius: 3px; background: var(--sr-preset-paper); border: 1px solid var(--sr-preset-ink); flex-shrink: 0; }
+      .sr-theme-preset[aria-selected="true"] .sr-theme-swatch { border-color: white; }
+      .sr-theme-custom { border-top: 1px solid var(--sr-rule); padding-top: 0.75rem; }
+      .sr-theme-custom-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.8rem; }
+      .sr-theme-custom-label { width: 55px; color: var(--sr-mute); }
+      .sr-theme-color-input { width: 1.5rem; height: 1.5rem; border: 1px solid var(--sr-rule); border-radius: 4px; padding: 0; cursor: pointer; background: none; }
+      .sr-theme-advanced { margin-top: 0.5rem; font-size: 0.8rem; }
+      .sr-theme-advanced summary { cursor: pointer; color: var(--sr-mute); margin-bottom: 0.3rem; }
+      .sr-theme-apply-custom, .sr-theme-reset { width: 100%; margin-top: 0.5rem; padding: 0.4rem; border: 1px solid var(--sr-rule); border-radius: 4px; background: var(--sr-paper); color: var(--sr-ink); cursor: pointer; font: inherit; }
+      .sr-theme-apply-custom:hover, .sr-theme-reset:hover { background: var(--sr-mute); color: var(--sr-paper); }
+      .sr-theme-btn:hover { border-color: var(--sr-teal); }
+    `;
+    doc.head.appendChild(style);
+  }
+
+  // Sync color inputs with current theme
+  function syncInputs() {
+    const current = getTheme(doc);
+    const paperInput = panel.querySelector('[data-prop="paper"]');
+    const inkInput = panel.querySelector('[data-prop="ink"]');
+    if (current.custom) {
+      if (current.custom.paper) paperInput.value = current.custom.paper;
+      if (current.custom.ink) inkInput.value = current.custom.ink;
+      if (current.custom.mute) panel.querySelector('[data-prop="mute"]').value = current.custom.mute;
+      if (current.custom.rule) panel.querySelector('[data-prop="rule"]').value = current.custom.rule;
+      if (current.custom.card) panel.querySelector('[data-prop="card"]').value = current.custom.card;
+    } else if (current.preset) {
+      const preset = THEME_PRESETS[current.preset];
+      paperInput.value = preset.paper;
+      inkInput.value = preset.ink;
+      if (preset.mute) panel.querySelector('[data-prop="mute"]').value = preset.mute;
+      if (preset.rule) panel.querySelector('[data-prop="rule"]').value = preset.rule;
+      if (preset.card) panel.querySelector('[data-prop="card"]').value = preset.card;
+    }
+  }
+
+  // Event handlers
+  let open = false;
+
+  function closePanel() {
+    panel.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    open = false;
+  }
+
+  function openPanel() {
+    panel.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    syncInputs();
+    open = true;
+  }
+
+  function togglePanel() {
+    if (open) closePanel(); else openPanel();
+  }
+
+  function onPresetClick(e) {
+    const btnEl = e.target.closest(".sr-theme-preset");
+    if (!btnEl) return;
+    const themeId = btnEl.dataset.theme;
+    setTheme(doc, { preset: themeId });
+    // Update UI
+    panel.querySelectorAll(".sr-theme-preset").forEach(b => b.removeAttribute("aria-selected"));
+    btnEl.setAttribute("aria-selected", "true");
+    closePanel();
+  }
+
+  function onApplyCustom() {
+    const custom = {};
+    for (const input of panel.querySelectorAll(".sr-theme-color-input")) {
+      const val = input.value;
+      if (val) custom[input.dataset.prop] = val;
+    }
+    setTheme(doc, { custom });
+    closePanel();
+  }
+
+  function onReset() {
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    applyTheme(root, "warm-paper");
+    closePanel();
+  }
+
+  function onClickOutside(e) {
+    if (open && !panel.contains(e.target) && !btn.contains(e.target)) {
+      closePanel();
+    }
+  }
+
+  function onKeydown(e) {
+    if (e.key === "Escape" && open) {
+      closePanel();
+      btn.focus();
+    }
+  }
+
+  btn.addEventListener("click", togglePanel);
+  panel.addEventListener("click", onPresetClick);
+  panel.querySelector(".sr-theme-apply-custom").addEventListener("click", onApplyCustom);
+  panel.querySelector(".sr-theme-reset").addEventListener("click", onReset);
+  doc.addEventListener("click", onClickOutside);
+  doc.addEventListener("keydown", onKeydown);
+
+  parent.appendChild(btn);
+  parent.appendChild(panel);
+
+  return {
+    dispose() {
+      btn.removeEventListener("click", togglePanel);
+      panel.removeEventListener("click", onPresetClick);
+      panel.querySelector(".sr-theme-apply-custom").removeEventListener("click", onApplyCustom);
+      panel.querySelector(".sr-theme-reset").removeEventListener("click", onReset);
+      doc.removeEventListener("click", onClickOutside);
+      doc.removeEventListener("keydown", onKeydown);
+      btn.remove();
+      panel.remove();
+    },
+  };
+}
